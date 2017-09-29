@@ -1,6 +1,6 @@
 class WasmView {
 
-    constructor(vi) {
+    constructor(wasm, vi) {
         // Update pointers to mimic C struct.
         let mem = wasm.getMemory()
         let base = wasm._getViewStructMemoryOffset(vi)

@@ -96,6 +96,9 @@ class Stage extends Base {
             this.textureAtlas = new TextureAtlas(this);
         }
 
+        this.wasmJs = new WasmJs();
+        this.wasm = this.wasmJs.wasm;
+
         this.ctx = new CoreContext(this);
 
         this.root = new View(this);
@@ -125,9 +128,6 @@ class Stage extends Base {
         if (self.textureAtlas) {
             self.textureAtlas.add(source);
         }
-
-        this.wasmJs = new WasmJs();
-        this.wasm = this.wasmJs.wasm;
 
         self.adapter.startLoop();
     }
@@ -266,6 +266,7 @@ let StageUtils = require('./StageUtils');
 let TextureManager = require('./TextureManager');
 let TextureAtlas = require('./TextureAtlas');
 let CoreContext = require('./core/CoreContext');
+let WasmJs = require('./core/wasm/WasmJs');
 /*A¬*/
 let TransitionManager = require('../animation/TransitionManager');
 let AnimationManager = require('../animation/AnimationManager');

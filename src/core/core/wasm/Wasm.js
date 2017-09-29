@@ -1,15 +1,20 @@
 /**
  * Todo:
- * - test
+ * - manage children, ensure that there aren't any unexpected resizes, and clean up properly on free
+ * - implement/test children array defragment
+ * - save missing fields in View for setting to wasm
+ * - implement update loop in wasm
+ * - disable update loop in ViewCore and copy values from wasm object, to ensure wasm correctness so far
  */
 
 
-function Wasm(env) {
+function Wasm(config) {
     var SIZEOF_VIEW_STRUCT = 216;
     var C_MEMORY = 1024;
 
+    this.config = config;
     this.maxViews = 0;
-    this.buffer = 0;
+    this.maxChildren = 0;
 
     // Memory layout:
     // C memory: 1kB
@@ -35,20 +40,17 @@ function Wasm(env) {
     }
 
     // Initialize memory layout.
-    // @pre: _maxViews > maxViews && _buffer > buffer (only grow).
-    this._setMemory = function(_maxViews, _buffer) {
-        let viewsMemory = _maxViews * (SIZEOF_VIEW_STRUCT + 24);
-        let requiredMemory = viewsMemory + _buffer + C_MEMORY; // Reserve first 1024 bytes for C-managed memory locations.
-        env.setMemory(requiredMemory);
+    // @pre: _maxViews > maxViews (only grow).
+    this._setMemory = function(_maxViews) {
+        let requiredMemory = _maxViews * (SIZEOF_VIEW_STRUCT + 24 + 72) + C_MEMORY; // Reserve first 1024 bytes for C-managed memory locations.
+        this.config.env._setMemory(requiredMemory);
 
-        if (this.buffer) {
-            // Copy buffer.
-            this.memmove(
-                C_MEMORY + ((24 + SIZEOF_VIEW_STRUCT) * _maxViews),
-                C_MEMORY + ((24 + SIZEOF_VIEW_STRUCT) * this.maxViews),
-                this.buffer
-            );
-        }
+        // Copy buffer.
+        this.memmove(
+            C_MEMORY + ((24 + SIZEOF_VIEW_STRUCT) * _maxViews),
+            C_MEMORY + ((24 + SIZEOF_VIEW_STRUCT) * this.maxViews),
+            72 * this.maxViews
+        );
 
         if (this.maxViews) {
             // Copy children.
@@ -82,7 +84,7 @@ function Wasm(env) {
 
         // Init used flags.
         this.memset(
-            C_MEMORY + (4 * this.maxViews),
+            C_MEMORY + (4 * _maxViews) + 4 * this.maxViews,
             0,
             4 * (_maxViews - this.maxViews)
         );
@@ -99,15 +101,11 @@ function Wasm(env) {
         this.children = new Uint32Array(memory, C_MEMORY + (8 + SIZEOF_VIEW_STRUCT) * _maxViews, _maxViews * 4);
 
         this.maxViews = _maxViews;
-        this.buffer = _buffer;
+        this.maxChildren = 4 * this.maxViews;
     }
 
-    this._outOfViewsMemory = function() {
-        this._setMemory(this.maxViews * 2, this.buffer);
-    }
-
-    this._outOfBufferMemory = function() {
-        this._setMemory(this.maxViews, this.buffer * 2);
+    this._outOfMemory = function() {
+        this._setMemory(this.maxViews * 2);
     }
 
     // JS-only: wasm provides its own implementation.
@@ -138,6 +136,9 @@ function Wasm(env) {
             }
         } else {
             // Forwards.
+            for (let i = 0; i < len; i++) {
+                target[dest + i] = target[src + i];
+            }
         }
     }
 
@@ -157,8 +158,7 @@ function Wasm(env) {
 
     this._main = function() {
         // Set initial memory. It will be grown automatically when needed.
-        // @todo: initialize with more memory pages (40 or so?).
-        this._setMemory(10, 1024);
+        this._setMemory(1000);
     }
 
     addWasmViewFuncs.apply(this);

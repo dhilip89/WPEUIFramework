@@ -105,8 +105,8 @@ class ViewChildList {
             } else {
                 c = this._view.stage.createView();
             }
-            this.add(c);
             c.setSettings(o);
+            this.add(c);
             return c;
         } else if (Array.isArray(o)) {
             for (let i = 0, n = o.length; i < n; i++) {
@@ -121,6 +121,7 @@ class ViewChildList {
     
     set(views) {
         this.clear();
+        let all = [];
         for (let i = 0, n = views.length; i < n; i++) {
             let o = views[i];
             if (Utils.isObjectLiteral(o)) {
@@ -130,12 +131,15 @@ class ViewChildList {
                 } else {
                     c = this._view.stage.createView();
                 }
-                this.add(c);
                 c.setSettings(o);
+                all.push(c);
             } else if (o.isView) {
-                this.add(o);
+                all.push(o);
             }
         }
+
+        // We prefer to add all children at once, so that the children array will be expanded gracefully.
+        all.forEach(c => this.add(c));
     }
 
     get length() {

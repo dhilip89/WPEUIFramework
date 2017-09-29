@@ -1,6 +1,7 @@
 function WasmJs() {
 
     const env = {_setMemory: bytes => {
+        console.log('extending memory', bytes / 1e3);
         return this.setMemory(bytes)
     }}
 
@@ -11,7 +12,7 @@ function WasmJs() {
     this.wasmUint32 = null;
 
     this.setMemory = function(bytes) {
-        let toGrow = bytes - this.wasmBuffer ? this.wasmBuffer.byteLength : 0;
+        let toGrow = bytes - (this.wasmBuffer ? this.wasmBuffer.byteLength : 0);
         if (toGrow > 0) {
             let pages = Math.ceil(toGrow / 65536);
             this.wasm.grow(pages);
@@ -90,6 +91,7 @@ function WasmJs() {
         // this.wasmUint32[memOffset+36] = view._colorBl;
         // this.wasmFloat32[memOffset+41] = view._zIndex;
         // this.wasmUint32[memOffset+42] = view._forceZIndexContext;
+        this.wasmUint32[memOffset+46] = this.wasm._allocateChildren(view._children.length);
         // this.wasmUint32[memOffset+50] = view._shader ? 1 : 0;
         this.wasmUint32[memOffset+51] = (view._texturizer && (view._texturizer._hasFilters() || view._texturizer._enabled)) || view._clipping ? 1 : 0;
         this.wasmUint32[memOffset+54] = (view._texturizer && view._texturizer.colorize) ? 1 : 0;
@@ -99,12 +101,16 @@ function WasmJs() {
             view._updateTextureCoords();
         }
 
+
         let children = view._children.get();
         if (children) {
             let m = children.length;
             if (m > 0) {
                 for (let i = 0; i < m; i++) {
-                    children[i]._attachBranchRecursive();
+                    this._attachBranchRecursive(children[i]);
+                }
+
+                for (let i = 0; i < m; i++) {
                 }
             }
         }
@@ -115,8 +121,8 @@ function WasmJs() {
     }
 
     this._detachBranchRecursive = function(view) {
-        view.wasmId = this.wasm._free(view.wasmId);
-
+        this.wasm._free(view.wasmId);
+        view.wasmId = 0;
         let children = view._children.get();
         if (children) {
             let m = children.length;
@@ -132,4 +138,6 @@ function WasmJs() {
 
 }
 
+let Wasm = require('./Wasm');
+module.exports = WasmJs;
 
