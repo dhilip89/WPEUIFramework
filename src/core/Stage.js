@@ -126,6 +126,9 @@ class Stage extends Base {
             self.textureAtlas.add(source);
         }
 
+        this.wasmJs = new WasmJs();
+        this.wasm = this.wasmJs.wasm;
+
         self.adapter.startLoop();
     }
 

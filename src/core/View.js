@@ -14,6 +14,8 @@ class View {
 
         this.id = View.id++;
 
+        this.wasmId = 0;
+
         this.stage = stage;
 
         this._core = new ViewCore(this);
@@ -303,6 +305,39 @@ class View {
      * Updates the 'attached' flag for this branch.
      */
     _updateAttachedFlag() {
+        let newAttached = this.isAttached();
+        if (this._attached !== newAttached) {
+            this._attached = newAttached;
+
+            this._updateAttachedFlagChildren();
+
+            if (newAttached) {
+                this.stage.wasmJs.attachBranch(this);
+            } else {
+                this.stage.wasmJs.detachBranch(this);
+            }
+        }
+    }
+
+    /**
+     * Updates the 'attached' flag for this branch.
+     */
+    _updateAttachedFlagChildren() {
+        let children = this._children.get();
+        if (children) {
+            let m = children.length;
+            if (m > 0) {
+                for (let i = 0; i < m; i++) {
+                    children[i]._updateAttachedFlagRecursive();
+                }
+            }
+        }
+    };
+
+    /**
+     * Updates the 'attached' flag for this branch.
+     */
+    _updateAttachedFlagRecursive() {
         // Calculate active flag.
         let newAttached = this.isAttached();
         if (this._attached !== newAttached) {
@@ -313,7 +348,7 @@ class View {
                 let m = children.length;
                 if (m > 0) {
                     for (let i = 0; i < m; i++) {
-                        children[i]._updateAttachedFlag();
+                        children[i]._updateAttachedFlagRecursive();
                     }
                 }
             }
@@ -498,7 +533,7 @@ class View {
         let rw = this._getRenderWidth();
         let rh = this._getRenderHeight();
         if (beforeW !== rw || beforeH !== rh) {
-            // Due to width/height change: update the translation vector and borders.
+            // Due to width/height change: update the translation vector.
             this._core.setDimensions(this._getRenderWidth(), this._getRenderHeight());
             this._updateLocalTranslate();
             return true
@@ -530,8 +565,8 @@ class View {
     };
 
     _updateLocalTranslate() {
-        let pivotXMul = this._pivotX * this._core.rw;
-        let pivotYMul = this._pivotY * this._core.rh;
+        let pivotXMul = this._pivotX * this.renderWidth;
+        let pivotYMul = this._pivotY * this.renderHeight;
         let px = this._x - (pivotXMul * this._core.localTa + pivotYMul * this._core.localTb) + pivotXMul;
         let py = this._y - (pivotXMul * this._core.localTc + pivotYMul * this._core.localTd) + pivotYMul;
         px -= this._mountX * this.renderWidth;
@@ -547,8 +582,12 @@ class View {
     };
 
     _updateLocalAlpha() {
-        this._core.setLocalAlpha(this._visible ? this._alpha : 0);
+        this._core.setLocalAlpha(this._getLocalAlpha());
     };
+
+    _getLocalAlpha() {
+        return this._visible ? this._alpha : 0
+    }
 
     _updateTextureCoords() {
         if (this.displayedTexture && this.displayedTexture.source) {
