@@ -22,7 +22,7 @@ function WasmJs() {
     }
 
     this.updateWasmBuffer = function() {
-        this.wasmBuffer = this.wasm.getMemory();
+        this.wasmBuffer = this.wasm.memory;
         this.wasmFloat32 = new Float32Array(this.wasmBuffer);
         this.wasmUint32 = new Uint32Array(this.wasmBuffer);
     }
@@ -118,10 +118,22 @@ function WasmJs() {
 
     this.detachBranch = function(view) {
         this._detachBranchRecursive(view);
+
+        this.wasm._detachZIndexedChildren()
     }
 
     this._detachBranchRecursive = function(view) {
         this.wasm._free(view.wasmId);
+
+        //@todo: also check for z-indexes:
+        // - clean up encapsulating context: remove all zIndexedChildren that are no longer 'used'.
+        // - get encapsulating zContext
+        // - gather all views that have zIndex and the encapsulating zContext (in array)
+        // - finally, filter the zIndexedChildren list
+
+        // - if this has zIndex, and has parent zContext that is not yet detached (used[index] == true), remove from
+        // this one from that children array.
+
         view.wasmId = 0;
         let children = view._children.get();
         if (children) {

@@ -12,10 +12,26 @@ function addWasmViewFuncs() {
         }
 
         let vi = this.slots[this.slotOffset++];
-
         this.used[vi] = 1;
-
         return vi;
+    }
+
+    this._addChildAt = function(vi, child, index) {
+        let offset = this._getViewStructMemoryOffset(vi) / 4;
+        let n = this.uptr[offset + 47];
+
+        if (!this._hasChildrenSpace(2 * (n + 1))) {
+            // Possibly out of children memory: defragment.
+            this._defragChildren();
+        }
+
+        let ptr = this.uptr[offset + 46];
+        this.__addChildAt(ptr, n, index, child);
+    }
+
+    this._freeBranch = function(vi) {
+        // Frees the complete branch.
+
     }
 
     this._free = function(vi) {
@@ -23,10 +39,9 @@ function addWasmViewFuncs() {
         this.slots[--this.slotOffset] = vi;
         this.used[vi] = 0;
 
-        // We do not release any children slots: we simply wait until we're out of children spaces and then defragment.
-        //@todo: also check for z-indexes:
-        // - gather all contexts that have changes
-        // - finally, for all contexts: loop through all zIndexedChildren lists, and filter by 'used' flags.
+        // @note: we do not release any children slots: we simply wait until we're out of children spaces and then
+        // defragment, because setting the slots (probably in the middel of the children array) back to 0 is unlikely
+        // to prevent an overflow anyway.
     }
 
 }

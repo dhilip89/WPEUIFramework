@@ -10,6 +10,7 @@
 
 function Wasm(config) {
     var SIZEOF_VIEW_STRUCT = 216;
+    var SIZEOF_VIEW_QUAD = 64 + 8;  // 64 bytes + view id + mode byte.
     var C_MEMORY = 1024;
 
     this.config = config;
@@ -21,34 +22,39 @@ function Wasm(config) {
     // Slots: 4B * maxViews
     // Used: 4B * maxViews
     // View structs: 220B * maxViews
-    // Children: 16B * maxViews
+    // Children: 24B * maxViews (we use up 8B extra memory to decrease the number of defragments)
     // Buffer: remaining (both GPU and general purpose buffer)
 
-    var memory = null;
+    this.memory = null;
 
     this.slots = null;
     this.slotOffset = 0;
     this.used = null;
     this.children = null;
 
-    this.getMemory = function() {
-        return memory;
-    }
+    this.uptr = null;
+    this.fptr = null;
 
+    // @inline
     this._getViewStructMemoryOffset = function(vi) {
         return C_MEMORY + (4 * this.maxViews) + (4 * this.maxViews) + (vi * SIZEOF_VIEW_STRUCT);
+    }
+
+    // @inline
+    this._getBufferMemoryOffset = function() {
+        return C_MEMORY + ((32 + SIZEOF_VIEW_STRUCT) * this.maxViews);
     }
 
     // Initialize memory layout.
     // @pre: _maxViews > maxViews (only grow).
     this._setMemory = function(_maxViews) {
-        let requiredMemory = _maxViews * (SIZEOF_VIEW_STRUCT + 24 + 72) + C_MEMORY; // Reserve first 1024 bytes for C-managed memory locations.
+        let requiredMemory = _maxViews * (SIZEOF_VIEW_STRUCT + 32 + SIZEOF_VIEW_QUAD) + C_MEMORY; // Reserve first 1024 bytes for C-managed memory locations.
         this.config.env._setMemory(requiredMemory);
 
         // Copy buffer.
         this.memmove(
-            C_MEMORY + ((24 + SIZEOF_VIEW_STRUCT) * _maxViews),
-            C_MEMORY + ((24 + SIZEOF_VIEW_STRUCT) * this.maxViews),
+            C_MEMORY + ((32 + SIZEOF_VIEW_STRUCT) * _maxViews),
+            C_MEMORY + ((32 + SIZEOF_VIEW_STRUCT) * this.maxViews),
             72 * this.maxViews
         );
 
@@ -90,18 +96,21 @@ function Wasm(config) {
         );
 
         // Init newly added slots.
-        this.slots = new Uint32Array(memory, C_MEMORY, _maxViews);
+        this.slots = new Uint32Array(this.memory, C_MEMORY, _maxViews);
         for (let i = this.maxViews; i < _maxViews; i++) {
             this.slots[i] = i;
         }
 
-        this.used = new Uint32Array(memory, C_MEMORY + 4 * _maxViews, _maxViews);
+        this.used = new Uint32Array(this.memory, C_MEMORY + 4 * _maxViews, _maxViews);
 
         // In C, we need to set the view struct pointer as well.
-        this.children = new Uint32Array(memory, C_MEMORY + (8 + SIZEOF_VIEW_STRUCT) * _maxViews, _maxViews * 4);
+        this.children = new Uint32Array(this.memory, C_MEMORY + (8 + SIZEOF_VIEW_STRUCT) * _maxViews, _maxViews * 4);
 
         this.maxViews = _maxViews;
         this.maxChildren = 4 * this.maxViews;
+
+        this.uptr = new Uint32Array(this.memory);
+        this.fptr = new Float32Array(this.memory);
     }
 
     this._outOfMemory = function() {
@@ -110,21 +119,21 @@ function Wasm(config) {
 
     // JS-only: wasm provides its own implementation.
     this.grow = function(pages) {
-        if (memory) {
-            let newMemory = new ArrayBuffer(memory.byteLength + pages * 65536);
+        if (this.memory) {
+            let newMemory = new ArrayBuffer(this.memory.byteLength + pages * 65536);
 
             // Copy all data.
-            (new Uint8Array(newMemory)).set(new Uint8Array(memory));
+            (new Uint8Array(newMemory)).set(new Uint8Array(this.memory));
 
-            memory = newMemory;
+            this.memory = newMemory;
         } else {
-            memory = new ArrayBuffer(pages * 65536);
+            this.memory = new ArrayBuffer(pages * 65536);
         }
     }
 
     this.memmove = function(dest, src, len) {
         // @pre: dest, src and len are 4B aligned.
-        let target = new Uint32Array(memory);
+        let target = new Uint32Array(this.memory);
         src = src / 4;
         dest = dest / 4;
         len = len / 4;
@@ -147,7 +156,7 @@ function Wasm(config) {
         let v = value + (value << 8) + (value << 16) + (value << 24);
 
         // @pre: dest and src are 4B aligned.
-        let target = new Uint32Array(memory, dest);
+        let target = new Uint32Array(this.memory, dest);
         let n = len / 4;
 
         for (let i = 0; i < n; i++) {
