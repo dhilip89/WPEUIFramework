@@ -27,7 +27,7 @@ function addWasmChildrenFuncs() {
             this.children[this.childrenPointer++] = child;
             while (i < n) {
                 this.children[this.childrenPointer++] = this.children[i];
-                // @note: we could clean up the previously used array here, but this would cost performance while it
+                // @note: we could free up the previously used slots here, but this would cost performance while it
                 // wouldn't help much to prevent children defragments.
                 i++;
             }
